@@ -65,20 +65,36 @@ And if autobinding fails for a more complex shape, we can always fall back to ex
 <details><summary>Explicit bind</summary>
 <p>
 
-explicit bind and how it's smaller than just placing larger tiles
+Using `bind`, we can make keys "reach" towards each other to form a solid plate. This is better than just making the key rectangles larger, because it doesn't increase the outer margins.
 
 <Tabs>
 <TabItem value="config" label="Config" default>
 
 ```yaml
-
+points:
+  zones:
+    matrix:
+      columns:
+        c1:
+          rows:
+            r1:
+            r2.key.bind: [0, 5, 0, 5] # bind left and right
+        c2:
+          rows:
+            r1:
+            r2:
+outlines:
+  plate:
+    - what: rectangle
+      where: true
+      bound: true
 ```
 
 </TabItem>
 <TabItem value="visualization" label="Visualization">
 <div style={{textAlign: 'center'}}>
 
-<!-- ![name](./assets/file.png) -->
+![Explicit bind example](./assets/explicit_bind.png)
 
 </div>
 </TabItem>
@@ -87,28 +103,38 @@ explicit bind and how it's smaller than just placing larger tiles
 </p>
 </details>
 
-
-
-
-
-
 <details><summary>Autobind</summary>
 <p>
 
-autobind explanation/illustration
+`autobind` does the same thing as `bind`, but automatically. You can just set `bound: true` and Ergogen will try to connect the keys. You can provide a numerical value to `autobind` to control the reach.
 
 <Tabs>
 <TabItem value="config" label="Config" default>
 
 ```yaml
-
+points:
+  key:
+    autobind: 10 # default is 10, but we're being explicit
+  zones:
+    matrix:
+      columns:
+        c1:
+        c2:
+      rows:
+        r1:
+        r2:
+outlines:
+  plate:
+    - what: rectangle
+      where: true
+      bound: true
 ```
 
 </TabItem>
 <TabItem value="visualization" label="Visualization">
 <div style={{textAlign: 'center'}}>
 
-<!-- ![name](./assets/file.png) -->
+![Autobind example](./assets/autobind.png)
 
 </div>
 </TabItem>
@@ -119,109 +145,77 @@ autobind explanation/illustration
 
 <br />
 
-
-
-
-
-
-
-
-
-
-
-
-
 ## Filtering
 
-Filtering is how Ergogen decides which points to use when placing the shape we're currently placing.
-After all, the points section might contain lots of zones, multiple *kinds* of points, helpers for mounting holes or one-off PCB footprints, etc.
-So being able to easily select a subset of these points can come in handy.
+Filtering is how Ergogen decides which points to use when placing a shape. This is essential because a config can contain many points for different purposes (key matrix, thumb cluster, mounting holes, etc.).
 
 ### Basics
 
-First up, let's see what a filter means depending on what datatype we use when declaring it:
+Filters can be defined using different data types:
 
-- **`undefined`**: if left empty, a filter produces the default `[0, 0, 0°]` origin point.
+- **`undefined`**: If left empty, the filter produces the default `[0, 0, 0°]` origin point.
+- **`boolean`**: `true` uses all points, `false` uses none.
+- **`string`**: A simple filter, explained below.
+- **`object` or `array` with an object**: Parsed as an [anchor](./points.md#anchors), returning a single point.
+- **`array` without objects**: A complex filter for advanced logic.
 
-- **boolean**: if the filter is `true`, all points are used; if it's `false`, no points are used.
+A simple **string filter** matches against a key's `name` and `tags`. For example, `matrix_pinky_home` selects that specific key.
 
-- **string**: represents a single/simple filter &ndash; the workings of which we'll discuss in a second.
+To select multiple keys, you can use **`tags`**. `tags` is a key-level attribute that can be an array of strings. A string filter will match any key that has the string in its `tags` array.
 
-- **object**, or **array that contains an object** somewhere: will be parsed as an [anchor](./points.md#anchors), returning the single resulting point.
+You can also use **regex** by surrounding the string with slashes (`/`). For example, `/^matrix_.*/` selects all keys in the `matrix` zone.
 
-  :::note
-  Although there can be valid anchor declarations that are neither objects, nor arrays containing an object at any depth, these are not supported where filters are expected because Ergogen would have no way to decide what it's looking at.
-  Remember, however, that every anchor **can** be represented in full object form &ndash; any other representation is just a shorthand for convenience.
-  :::
-
-- **array containing no objects** at any depth: complex filter, see [Advanced usage](#advanced-usage).
-
-So the undefined and boolean cases are easy, objects just redirect to anchors, and arrays are more advanced.
-What about strings, then?
-
-At their simplest, strings just compare the given value against the name of each key and check for straight equality.
-Since names are unique, this makes it easy to single out a point, but nothing more. How do we get "real" subsets?
-
-Enter the `tags` key-level attribute.
-It can be either an array (containing string tags, or "labels" that should apply to the given point), or an object (in which case the keys from its key/value pairs count).
-Arrays are probably more readable, while objects might be more easily extendable via inheritance or preprocessing.
-Use whichever form makes sense.
-
-:::tip
-`tags` is yet another key-level attribute that gains meaning during outlining only, like `bind` did above.
-:::
-
-By default, string filters consider not only the name of each key but their tags, too.
-And combining their basic exact matching behavior with a non-unique field leads to easy subset selection. Yay!
-
-But wait, there's more!
-If the string is surrounded by `/`s (slashes), it's interpreted as a regex, and exact matching changes to pattern matching.
-So we might not even *need* tags for, say, differentiating zones because we know that key names by default are formatted as `zone_column_row` so we can just say something like `/^matrix_.*/` to filter any key whose name starts with the substring `matrix_`.
-The usual regex flags are also supported if specified after the trailing slash, so feel free to use case-insensitive, multiline, or even unicode expressions should the need arise.
-
-Finally, if it would be easier to select what we **don't** want instead of what we **do** want, filters support negation if prefixed by a `-` (minus).
-So while saying `matrix_pinky_home` select only that one key, `-matrix_pinky_home` selects everything *except* that key.
-This also works with both tags and regexes, of course, so `-alpha` selects everything that isn't tagged with `alpha` (assuming the existence of an alpha tag), and `-/pinky/` selects keys where the "pinky" substring *isn't* found anywhere within the name or any of its tags.
-
-
+To **negate** a filter, prefix it with a minus sign (`-`). For example, `-matrix_pinky_home` selects all keys *except* `matrix_pinky_home`.
 
 ### Advanced usage
 
-Every single filter actually consists of three components:
+Every simple filter actually consists of three components: `which` key-level attributes to check, `how` to check them, and `what` value to check for.
 
-1. **which** key-level attributes to check against,
-2. **how** to check against them, and
-3. **what** value to check against them.
+The default is `meta.name,meta.tags ~ something`, where `~` is a similarity operator. You can write a **full form filter** to change this. For example, to filter by a custom `foobar` attribute, you could write `meta.foobar ~ something`.
 
-So far, we've only used the third component, as the **which** part was always the default `name` and `tags`, while the **how** part was interpreted as the special "similarity" operator, handling both exact matches and regexes.
-But what if we want to check against some other key-level attribute; or check in a different way?
-
-Enter full form filters.
-In the background, writing `something` gets translated as `meta.name,meta.tags ~ something`, where `meta` is each key's metadata containing all key-level attributes (see [Keys](./points.md#keys)) and `~` is the similarity operator.
-So if we want to check against something else (say, we declared our own `foobar` field among the other key-level attributes), then we can simply say `meta.foobar ~ something`.
-As for operators, only similarity (`~`) is implemented for now, but others (such as mathematical relations) will be added in the future.
-
-For even more advanced usage, we can combine simple filters with AND/OR logical relations into complex filters using arrays.
-Odd levels of array nesting represent OR, while even levels represent AND.
-So, for example, writing `[something, other]` would mean that all points are returned where either `something` **OR** `other` matches the name/tags, while `[[something, other]]` would only return points where both `something` **AND** `other` matches (note the double arrays in the latter case).
+For even more advanced usage, you can combine filters with **AND/OR** logic using arrays. Odd levels of nesting are OR, and even levels are AND.
+- `[filter1, filter2]` is `filter1` OR `filter2`.
+- `[[filter1, filter2]]` is `filter1` AND `filter2`.
 
 ### Examples
 
 <details><summary>Tags</summary>
 <p>
 
+Here, we use tags to create separate outlines for the alphas and the thumb keys.
+
 <Tabs>
 <TabItem value="config" label="Config" default>
 
 ```yaml
-
+points:
+  zones:
+    matrix:
+      key:
+        tags: ['alphas']
+      columns: {c1:, c2: }
+      rows: {r1: }
+    thumb:
+      key:
+        tags: ['thumbs']
+      anchor:
+        ref: matrix_c2_r1
+        shift: [20, -20]
+      columns: {t1: }
+outlines:
+  alphas:
+    - what: rectangle
+      where: {tags: 'alphas'}
+  thumbs:
+    - what: rectangle
+      where: {tags: 'thumbs'}
 ```
 
 </TabItem>
 <TabItem value="visualization" label="Visualization">
 <div style={{textAlign: 'center'}}>
 
-<!-- ![name](./assets/file.png) -->
+![Filtering with tags](./assets/filter_tags.png)
 
 </div>
 </TabItem>
@@ -229,25 +223,32 @@ So, for example, writing `[something, other]` would mean that all points are ret
 
 </p>
 </details>
-
-
-
 
 <details><summary>Regexes</summary>
 <p>
 
+This example uses a regex to select all keys in the `c1` column.
+
 <Tabs>
 <TabItem value="config" label="Config" default>
 
 ```yaml
-
+points:
+  zones:
+    matrix:
+      columns: { c1:, c2: }
+      rows: { r1:, r2: }
+outlines:
+  c1_keys:
+    - what: rectangle
+      where: /_c1_/
 ```
 
 </TabItem>
 <TabItem value="visualization" label="Visualization">
 <div style={{textAlign: 'center'}}>
 
-<!-- ![name](./assets/file.png) -->
+![Filtering with regex](./assets/filter_regex.png)
 
 </div>
 </TabItem>
@@ -255,25 +256,32 @@ So, for example, writing `[something, other]` would mean that all points are ret
 
 </p>
 </details>
-
-
-
 
 <details><summary>Negation</summary>
 <p>
 
+This example creates an outline for all keys *except* the home row.
+
 <Tabs>
 <TabItem value="config" label="Config" default>
 
 ```yaml
-
+points:
+  zones:
+    matrix:
+      columns: { c1:, c2: }
+      rows: { top:, home:, bottom: }
+outlines:
+  not_home:
+    - what: rectangle
+      where: -/_home$/
 ```
 
 </TabItem>
 <TabItem value="visualization" label="Visualization">
 <div style={{textAlign: 'center'}}>
 
-<!-- ![name](./assets/file.png) -->
+![Filtering with negation](./assets/filter_negation.png)
 
 </div>
 </TabItem>
@@ -281,51 +289,32 @@ So, for example, writing `[something, other]` would mean that all points are ret
 
 </p>
 </details>
-
-
-
-
-<details><summary>Full filters</summary>
-<p>
-
-<Tabs>
-<TabItem value="config" label="Config" default>
-
-```yaml
-
-```
-
-</TabItem>
-<TabItem value="visualization" label="Visualization">
-<div style={{textAlign: 'center'}}>
-
-<!-- ![name](./assets/file.png) -->
-
-</div>
-</TabItem>
-</Tabs>
-
-</p>
-</details>
-
-
-
 
 <details><summary>Combination</summary>
 <p>
 
+This example selects keys that are in the `c1` column AND are on the `home` row.
+
 <Tabs>
 <TabItem value="config" label="Config" default>
 
 ```yaml
-
+points:
+  zones:
+    matrix:
+      columns: { c1:, c2: }
+      rows: { top:, home:, bottom: }
+outlines:
+  c1_home:
+    - what: rectangle
+      where: [[ /_c1_/, /_home$/ ]]
 ```
 
 </TabItem>
 <TabItem value="visualization" label="Visualization">
 <div style={{textAlign: 'center'}}>
 
-<!-- ![name](./assets/file.png) -->
+![Combined filtering](./assets/filter_combination.png)
 
 </div>
 </TabItem>
@@ -336,16 +325,9 @@ So, for example, writing `[something, other]` would mean that all points are ret
 
 <br />
 
-
-
-
-
-
-
 ## Parts
 
-With this, we can finally move on to the outlines themselves.
-The relevant section in the config will look something like this:
+With filtering understood, we can finally move on to the outlines themselves. An outline is a collection of **parts**, which are combined in order to create a final shape.
 
 <Tabs>
 <TabItem value="array" label="Array notation" default>
@@ -356,7 +338,6 @@ outlines:
     - <part>
     - <part>
     - ...
-  ...
 ```
 
 </TabItem>
@@ -368,209 +349,94 @@ outlines:
     part1: <part>
     part2: <part>
     ...
-  ...
 ```
 
 </TabItem>
 </Tabs>
 
-:::note
-Listing parts within an outline can be an object as well as an array (see "Object notation" tab).
-Objects might be beneficial if part names are important for config readability (or when YAML or built-in inheritance is used), while arrays are a bit more terse.
-Use whichever form makes more sense.
-:::
-
-Operations are performed in order, and the resulting shape is exported as an output.
-Additionally, it is going to be available for further outline declarations to use (through the `outline` type, see below) under the name specified (`<outline_name>`, in this case).
-
-Now let's see how those `<part>`s are made.
-
-
+Operations are performed in order. The resulting shape is exported and also becomes available for other outlines to use.
 
 ### Common attributes
 
 Each part has the following common attributes:
 
-- **`what`**: declares *what* shape we want to place &ndash; see [Shapes](#shapes).
-
-- **`where`**: declares *where* we want to place those shapes &ndash; this is where we can use the previously discussed filters.
-
-- **`operation`**: indicates how we want the current part to combine with the cumulative result of previous parts.
-Options include:
-
-  - **`add`**: produces an union &ndash; this is the default operation.
-  - **`subtract`**: subtracts this part from the in-progress result.
-  - **`intersect`**: computes the intersection of this part and the in-progress result.
-  - **`stack`**: just draws the current part "on top of" the in-progress result (possibly crossing lines instead of calculating unions).
-
-    :::tip
-    `stack` can be used as a computationally "cheaper" `subtract` in some cases, but it's mostly for being able to visualize individual parts in the context of other parts and getting a sense of what happens (i.e., debugging).
-    :::
-
-- **`bound`**: boolean value, representing whether we want to activate binding on the shapes or not.
-If `false`, the shapes are placed as-is.
-If `true`, the corresponding binding rectangles are added to each relevant side of each shape and the results union'ed.
-
-- **`asym`**: the field is a companion to the `where` filter and represents how filtering should treat mirrored points.
-  The same values are available that we've discussed in the [Mirroring](./points.md#mirroring) section &ndash; the canonical choices are `source`/`clone`/`both`.
-
-  - The default `source` only returns the points matched by the filter.
-
-  - `clone` returns only the mirrored versions of the points that would be matched by the filter.
-
-  - `both` returns both the regular matches and their mirror images.
-
-    :::caution
-    If the filter translates to an anchor, this check is ***strict*** &ndash; meaning that Ergogen will error out if the mirror image doesn't exist.
-    On the other hand, the mirror check is permissive for regular filters, including them if they exist and ignoring the cases where they don't.
-    :::
-
-- **`adjust`**: a relative anchor by which to adjust the position of each shape &ndash; similarly to the key-level `adjust` attribute.
-
-  :::tip
-  This field makes it possible to place shapes not only **at** certain filtered points, but also **below** or **next to** those points.
-  :::
-
-- **`scale`**: an optional multiplier by which to scale the resulting shape.
-  The default is `1` for no scaling.
-
-- **`expand`**: a number in mm's by which to expand (or shrink, if the number is negative) the current outline.
-  Differs from `scale`ing because it draws and external (or internal) "outline" for the starting shape, thereby usually changing the shape itself, too, not just its size.
-  For more info, see the relevant [Maker.JS docs](https://maker.js.org/docs/advanced-drawing/#Expanding%20paths).
-
-- **`joints`**: a companion to `expand`, specifying which type of treatment to apply to the joints during expansion/shrinking.
-
-  - `0` or `round` means the corners will be rounded (thereby having **zero** joints);
-  - `1` or `pointy` means the corners will stay (thereby still having **one** joint); and
-  - `2` or `beveled` means the corners will get beveled (thereby having **two** joints).
-
-- **`fillet`**: this number (if greater than the default zero) triggers a filleting operation on the (almost-)completed part and rounds its corners with the given radius.
-  If the radius is larger than either of the corner's neighboring line segments, that corner is skipped.
-
-  :::tip
-  Once a corner is filleted, it won't be filleted again, so it's safe to apply a `fillet` with increasingly smaller radii to catch every sharp corner if desired.
-  :::
-
-
-
-
+- **`what`**: The shape to place (e.g., `rectangle`). See [Shapes](#shapes).
+- **`where`**: A filter to select the points where the shape will be placed.
+- **`operation`**: How to combine this part with the result of the previous parts.
+  - `add`: (Default) Union of the shapes.
+  - `subtract`: Subtracts this part from the result.
+  - `intersect`: Intersects this part with the result.
+  - `stack`: Draws the part "on top" of the result (useful for debugging).
+- **`bound`**: A boolean indicating whether to apply binding.
+- **`asym`**: How the `where` filter should handle mirrored points (`source`, `clone`, or `both`).
+- **`adjust`**: An anchor to adjust the position of each placed shape.
+- **`scale`**: A multiplier to scale the shape.
+- **`expand`**: A value in mm to expand or shrink the outline.
+- **`joints`**: How to treat joints when expanding (`round`, `pointy`, or `beveled`).
+- **`fillet`**: A radius to round the corners of the part.
 
 ### Shapes
 
-Shapes can have their own, shape-specific attributes on top of the ones already discussed above.
-Additionally, each shape can introduce shape-specific units to the evaluation context to further avoid repetition.
+Shapes can have their own specific attributes.
 
-:::tip
-Say we'd want to express that a rectangle of size `10` should be adjusted half of its width to the right.
-We could write `adjust.shift: [5, 0]`, of course, but then if the size changes, the shift needs to change as well.
-Instead, we could write `adjust.shift: [.5 sx, 0]`, referencing the size's x value (i.e., its width).
-:::
-
-With this, let's see a list of what actual shapes we can place, what extra attributes they have, and what extra units they introduce:
-
-- **`rectangle`**: A basic rectangle primitive.
-
-  - **`size`**: Either a number or an array in the form `[num_x, num_y]`, representing the width/height of the rectangle(s) to place. If it's a single number `num`, it's interpreted as `[num, num]` (i.e., a square). Mandatory. Introduces `sx` and `sy` as units for width and height, respectively.
-
-  - **`bevel`**: Optional beveling for the rectangles, default is `0`.
-  
-  - **`corner`**: Optional corner radius for the rectangles, default is `0`.
-
-    :::caution
-    `size` represents the final size of the resulting rectangle, so any `bevel` or `corner` values are subtracted from it appropriately to make room for the bevels/radii.
-    This can lead to an error if the size is too small (or the `bevel`/`corner` values are too large).
-    :::
-
-    :::tip
-    Corners and bevels can be used simultaneously.
-    Corner radii are applied after beveling, leading to rounded bevels.
-    :::
-
-- **`circle`**: A basic circle primitive.
-
-  - **`radius`**: The radius of the circle to place. Mandatory. Introduces `r` as a unit.
-
-- **`poly`**: A custom polygon.
-
-  - **`points`**: Mandatory array of anchors, representing the points of the polygon.
-    Each item of the array is a regular anchor &ndash; the only difference is that if its `ref` is unspecified, the polygon's previous point will be assumed (to simulate a continuous chain).
-    For the first point, `[0, 0, 0°]` is assumed to be the starting point by default (as the polygon will be placed using a `[0, 0]` origin anyway).
-  
-- **`outline`**: Allows reuse of an already existing outline as a primitive for further outlines.
-
-  - **`name`**: The name to identify the outline to place. Mandatory.
-
-  - **`origin`**: An optional anchor to specify which point in the existing outline to consider as the origin (i.e., the location of the outline by which it's placed at the requested points during outlining).
-
-    :::tip
-    `origin` is functionally identical to the globally available `adjust`, only it applies before placing each outline at the target points while `adjust` applies afterwards.
-    Both options are available for flexibility, feel free to use either (or both in conjunction, if appropriate).
-    :::
-
-
-
-
-
-
-
-
-
+- **`rectangle`**:
+  - `size`: The width and height, as a number or a `[width, height]` array.
+  - `bevel`: The bevel size.
+  - `corner`: The corner radius.
+- **`circle`**:
+  - `radius`: The radius of the circle.
+- **`poly`**:
+  - `points`: An array of anchors defining the polygon's vertices.
+- **`outline`**:
+  - `name`: The name of a previously defined outline to reuse.
+  - `origin`: An anchor specifying the origin point of the outline.
 
 ### Syntactic sugar
 
-At this point, we're done with actual outline functionality, but there are some extra shorthands and conveniences worth mentioning.
-
-The first kind are `string shorthands`, where a part within an outline is given by a single string instead of a whole object.
-This is a streamlined way to refer to already existing outlines and combine them further.
-The format of this string should start with a symbol from `[+, -, ~, ^]`, followed by a name, and is equivalent to adding/subtracting/intersecting/stacking an outline of that name, respectively.
-More specifically, `~something` is equivalent to:
-
-```yaml
-what: outline
-where: undefined # meaning [0, 0, 0°], so just placing the outline where it is
-name: something
-operation: intersect
-```
-
-If the symbol prefix is missing, addition is assumed &ndash; so simply naming outlines as parts works, too.
-
-Another minor shorthand is declaring the `expand` and `joints` fields all at once using just the `expand` field, and specifying its value as the number for the expansion, followed by either `)`, `>`, or `]` (representing `round`, `pointy`, and `beveled` joints, respectively).
-So an `expand` value of `3]` would translate to:
-
-```yaml
-expand: 3
-joints: beveled
-```
-
-Finally, "private" outlines: if we only want to use an outline as a building block for further outlines, we can start its name with an underscore (e.g., `_my_name`) to prevent it from being actually exported.
-(By convention, a starting underscore is kind of like a "private" marker.)
-
-
-
-
-
-
-
-
-
+- **String shorthands**: A part can be defined as a string like `+outline_name` or `-outline_name` for quick add/subtract operations.
+- **`expand` shorthand**: `expand: 3]` is equivalent to `expand: 3, joints: beveled`.
+- **Private outlines**: An outline name starting with `_` will not be exported.
 
 ### Examples
 
 <details><summary>Shapes</summary>
 <p>
 
+This example shows how to create a plate with rectangular holes for keys, and a circular hole for a rotary encoder.
+
 <Tabs>
 <TabItem value="config" label="Config" default>
 
 ```yaml
-
+points:
+  zones:
+    matrix:
+      columns: {c1:}
+      rows: {r1:}
+    encoder:
+      anchor:
+        ref: matrix_c1_r1
+        shift: [25, 0]
+      columns: {enc:}
+outlines:
+  plate:
+    - what: rectangle
+      where: true
+      size: [50, 25]
+    - what: rectangle
+      where: /matrix/
+      operation: subtract
+    - what: circle
+      where: /encoder/
+      radius: 6
+      operation: subtract
 ```
 
 </TabItem>
 <TabItem value="visualization" label="Visualization">
 <div style={{textAlign: 'center'}}>
 
-<!-- ![name](./assets/file.png) -->
+![Shapes example](./assets/shapes.png)
 
 </div>
 </TabItem>
@@ -582,18 +448,42 @@ Finally, "private" outlines: if we only want to use an outline as a building blo
 <details><summary>Boolean operations</summary>
 <p>
 
+This example demonstrates the `add`, `subtract`, and `intersect` operations.
+
 <Tabs>
 <TabItem value="config" label="Config" default>
 
 ```yaml
-
+points:
+  zones:
+    main:
+      columns: {c1:}
+      rows: {r1:}
+outlines:
+  shape1:
+    - what: rectangle
+      size: [30, 20]
+  shape2:
+    - what: circle
+      radius: 15
+      adjust:
+        shift: [20, 0]
+  added:
+    - shape1
+    - +shape2
+  subtracted:
+    - shape1
+    - -shape2
+  intersected:
+    - shape1
+    - ~shape2
 ```
 
 </TabItem>
 <TabItem value="visualization" label="Visualization">
 <div style={{textAlign: 'center'}}>
 
-<!-- ![name](./assets/file.png) -->
+![Boolean operations](./assets/boolean_operations.png)
 
 </div>
 </TabItem>
@@ -602,22 +492,46 @@ Finally, "private" outlines: if we only want to use an outline as a building blo
 </p>
 </details>
 
-
 <details><summary>Asymmetry</summary>
 <p>
+
+Here we create a plate where the left half has a circular cutout, but the right half has a rectangular one.
 
 <Tabs>
 <TabItem value="config" label="Config" default>
 
 ```yaml
-
+points:
+  mirror:
+    ref: matrix_c1_r1
+    distance: 100
+  zones:
+    matrix:
+      columns: {c1:}
+      rows: {r1:}
+outlines:
+  plate:
+    - what: rectangle
+      where: true
+      bound: true
+      asym: both
+    - what: circle
+      where: matrix_c1_r1
+      radius: 5
+      asym: source
+      operation: subtract
+    - what: rectangle
+      where: matrix_c1_r1
+      size: 10
+      asym: clone
+      operation: subtract
 ```
 
 </TabItem>
 <TabItem value="visualization" label="Visualization">
 <div style={{textAlign: 'center'}}>
 
-<!-- ![name](./assets/file.png) -->
+![Outline asymmetry](./assets/outline_asymmetry.png)
 
 </div>
 </TabItem>
@@ -629,18 +543,31 @@ Finally, "private" outlines: if we only want to use an outline as a building blo
 <details><summary>Adjustments</summary>
 <p>
 
+This example shows how to use `fillet` and `expand` to create a rounded plate with a thicker border.
+
 <Tabs>
 <TabItem value="config" label="Config" default>
 
 ```yaml
-
+points:
+  zones:
+    matrix:
+      columns: {c1:, c2:}
+      rows: {r1:, r2:}
+outlines:
+  plate:
+    - what: rectangle
+      where: true
+      bound: true
+      expand: 3
+      fillet: 2
 ```
 
 </TabItem>
 <TabItem value="visualization" label="Visualization">
 <div style={{textAlign: 'center'}}>
 
-<!-- ![name](./assets/file.png) -->
+![Outline adjustments](./assets/outline_adjustments.png)
 
 </div>
 </TabItem>

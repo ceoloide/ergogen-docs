@@ -18,108 +18,127 @@ To help you get started, Ergogen can automatically position the necessary footpr
 
 ## Usage
 
-A `pcbs` block in the config looks something like the following:
+A `pcbs` block in your config defines the PCBs to be generated. Here's a basic structure:
 
 ```yaml
 pcbs:
   <pcb_name>:
     outlines:
-      - outline: <reference to existing outline> # required
-        layer: <which KiCAD layer to draw on> # default = Edge.Cuts
-      ...
+      - outline: <outline_ref> # required
+        layer: <kicad_layer>   # default: Edge.Cuts
     footprints:
-      - where: <filter> # same as for outlines
-        asym: source | clone | both # same as for outlines, default = both
-        adjust: <anchor> # same as for outlines
-        what: <footprint to use>
-        params: <param object for the footprint>
-      ...
-    references: <boolean, whether to show component references on the pcb> # default = false
-    template: <string> # name of the PCB template to use, default = kicad5
-    params: <anything, pcb-level custom parameters passed to the template>
-  ...
+      - where: <filter>
+        asym: source | clone | both # default: both
+        adjust: <anchor>
+        what: <footprint_name>
+        params: <footprint_params>
+    references: <boolean> # default: false
+    template: <string>   # default: kicad5
+    params: <object>     # pcb-level custom parameters
 ```
 
-:::note
-The `pcbs.outlines` and the `pcbs.footprints` sections can both contain either arrays or objects, just like with outline or case parts previously.
-Use whichever is more convenient.
-:::
+### Outlines
 
-The most common use for the `pcbs.<pcb_name>.outlines` section is to define an edge cut for the pcb.
-Simply reference one of the previously defined outlines through the `outline` setting and you're good to go.
-Additionally, the section can also be used to send arbitrary marks to other silk or user defined layers, if its `layer` setting is specified.
+The `outlines` section is most commonly used to define the edge cut of the PCB. You simply reference a previously defined outline. You can also use this section to draw on other KiCad layers, like the silkscreen, by specifying the `layer`.
 
-Then comes the meat of the pcb declaration: placing footprints.
-The `where`/`asym`/`adjust` keys do the exact same thing they did for [Outlines](./outlines.md#common-attributes), only now the points they produce will be used to place the footprint selected by the `what` key.
-For a list of built-in footprints available, please check the contents of [this folder](https://github.com/ergogen/ergogen/tree/master/src/footprints) &ndash; the basename of each file here is what we can specify under the `what` key.
-As for what parameters the chosen footprint can take, please refer to the footprint file's top comment (or the `params` section within the module exports).
+### Footprints
 
-Footprint parameters can be simple values like booleans/numbers/strings, aggregate values like arrays/objects, or custom Ergogen-specific values like "net" or "anchor".
+This is where you place the components on your PCB.
+- `where`, `asym`, and `adjust` work just like they do for [outlines](./outlines.md).
+- `what` specifies the footprint to use. For a list of built-in footprints, check the contents of [this folder](https://github.com/ergogen/ergogen/tree/master/src/footprints).
+- `params` is an object of parameters for the chosen footprint. To see the available parameters for a footprint, check the top of its file in the footprints folder.
 
-- **Nets** are identified by a unique string name, but they are also indexed internally so that KiCAD knows what should connect where. Every component designated to the same net should be connected together once the PCB is routed.
+Footprint parameters can be simple values (booleans, numbers, strings), complex values (arrays, objects), or special Ergogen types like `net` and `anchor`.
+- **Nets** are used to define electrical connections. Components on the same net should be connected during routing.
+- **Anchors** can be used to pass additional points to the footprint.
 
-- **Anchors** can be used to pass points to the footprint other than the position it will be placed at.
-
-It's important to uniformly note, though, that parameter parsing supports templating, as discussed under [Points](./points.md#keys). This means that key-level attributes can be passed along as footprint parameters, so when placing a footprint at multiple points, each footprint instance will have its appropriate parameter value overridden by the current point.
+Parameter parsing supports **templating**, which means you can pass key-level attributes to footprints. This is very powerful for placing many similar components.
 
 :::info
-For example: assuming custom `from_net` and `to_net` attributes have been filled out in the points section, all keys on the keyboard can be placed by a single footprint declaration through templating, like so:
-
+For example, you can define `from_net` and `to_net` attributes for each key in the `points` section, and then use a single footprint declaration to place all the switches:
 ```yaml
-pcbs.<pcb_name>.footprints:
-  - where: true # everywhere
-    what: mx # Cherry MX type switches
-    params:
-      from: "{{from_net}}" # double curly braces means templating...
-      to: "{{to_net}}" # so, reading from the point's key-level attributes
+pcbs:
+  my_pcb:
+    footprints:
+      - where: true # place on all points
+        what: mx    # Cherry MX switch footprint
+        params:
+          from: "{{from_net}}" # template from the point's "from_net" attribute
+          to: "{{to_net}}"   # template from the point's "to_net" attribute
 ```
 :::
 
-After both outlines and footprints are placed, only some fine-tuning is left for Ergogen to do:
+After placing outlines and footprints, Ergogen performs some final steps:
+- Shows or hides footprint references based on the `references` key.
+- Fills in PCB metadata (`name`, `version`, `author`) from the config.
+- Pastes everything into the specified PCB `template`.
 
-- Globally show or hide all footprint references on the final PCB according to the `references` key.
-
-- Fill the PCB metadata:
-  - the name according to the `<pcb_name>` given in the config,
-  - the version and author according to the top level `meta.version` and `meta.author` (see [Metadata](./metadata.md)).
-
-- Paste the calculated outlines and footprints into the correct PCB template (specified via `pcbs.<pcb_name>.template`).
-
-The result is an **un-routed** KiCAD PCB, meaning that while everything knows what it **should** connect to, nothing's actually connected yet.
-It's because the logistics (or, more like, the "topology") of potentially intersecting traces is not exactly trivial for a machine to automatically figure out.
-From this point on, we can either trust an auto-router program to try and figure it out anyway (which is entirely possible for a simple keyboard project, even if not trivial), or we can route the connections manually (which is not nearly as hard as these disclaimers make it sound, by the way).
+The result is an **unrouted** KiCad PCB. All the components are in place, but you still need to draw the electrical connections (traces). You can do this manually in KiCad or use an auto-router.
 
 :::tip
-Keyboards tend to incorporate lots of keys, while microcontrollers tend to lack that many general purpose I/O pins.
-The most common solution is matrix wiring, which you can learn about [**here**](http://blog.komar.be/how-to-make-a-keyboard-the-matrix/) or [**here**](https://www.dairequinlan.com/2020/12/the-keyboard-part-2-the-matrix/).
-Additionally, [**here**](https://wiki.ai03.com/books/pcb-design/page/pcb-guide-part-1---preparations)'s a very good introductory KiCAD tutorial covering most bases.
+Keyboards use a matrix to minimize the I/O pins required on the microcontroller. You can learn more about keyboard matrices [here](http://blog.komar.be/how-to-make-a-keyboard-the-matrix/) and [here](https://www.dairequinlan.com/2020/12/the-keyboard-part-2-the-matrix/).
 :::
+*Note: The ai03 PCB guide, which was previously linked, is currently unavailable.*
 
 <br />
-
-
-
-
-
-
 
 ## Examples
 
 <details><summary>Simple Keys + MCU</summary>
 <p>
+This example demonstrates how to create a simple PCB with two keys and a Pro Micro microcontroller.
 
 <Tabs>
 <TabItem value="config" label="Config" default>
 
 ```yaml
-
+points:
+  zones:
+    main:
+      columns:
+        c1:
+          rows:
+            r1.key.from: "ROW1"
+            r2.key.from: "ROW2"
+        c2:
+          rows:
+            r1.key.from: "ROW1"
+            r2.key.from: "ROW2"
+      key:
+        to: "{{col.name}}" # Use column name as the "to" net
+    mcu:
+      anchor:
+        ref: main_c2_r1
+        shift: [25, 0]
+      columns: {pro_micro:}
+outlines:
+  pcb_outline:
+    - what: rectangle
+      where: true
+      bound: true
+      expand: 2
+pcbs:
+  simple:
+    outlines:
+      - pcb_outline
+    footprints:
+      - what: mx
+        where:
+          tags: main
+        params:
+          from: "{{key.from}}"
+          to: "{{key.to}}"
+      - what: promicro
+        where: mcu_pro_micro
+        params:
+          orientation: "down"
 ```
 
 </TabItem>
 <TabItem value="visualization" label="Visualization">
 <div style={{textAlign: 'center'}}>
 
-<!-- ![name](./assets/file.png) -->
+![Simple PCB example](./assets/simple_pcb.png)
 
 </div>
 </TabItem>

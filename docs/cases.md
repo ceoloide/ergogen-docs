@@ -6,64 +6,66 @@ sidebar_position: 7
 
 ## Overview
 
-TODO -> outline to case illustration
+Cases add a basic 3D aspect to the generation process. In this phase, you take outlines (defined in the previous section), extrude them, position them in space, and combine them into a single 3D-printable object.
 
-Cases add a pretty basic and minimal 3D aspect to the generation process.
-In this phase, we take different outlines (defined in the previous section, even the "private" ones), extrude and position them in space, and combine them into one 3D-printable object.
-That's it.
-Declarations might look something like the following:
+A case declaration looks like this:
 
 ```yaml
 cases:
-    case_name:
-        - what: outline # default option
-          name: <outline ref>
-          extrude: num # default = 1
-          shift: [x, y, z] # default = [0, 0, 0]
-          rotate: [ax, ay, az] # default = [0, 0, 0]
-          operation: add | subtract | intersect # default = add
-        - what: case
-          name: <case_ref>
-          # extrude makes no sense here...
-          shift: # same as above
-          rotate: # same as above
-          operation: # same as above
-        - ...
-    ...
+  case_name:
+    - what: outline # default
+      name: <outline_ref>
+      extrude: <number> # default: 1
+      shift: [x, y, z] # default: [0, 0, 0]
+      rotate: [ax, ay, az] # default: [0, 0, 0]
+      operation: add | subtract | intersect # default: add
+    - what: case
+      name: <case_ref>
+      # extrude makes no sense here
+      shift: # same as above
+      rotate: # same as above
+      operation: # same as above
+    - ...
 ```
 
-:::note
-Individual case parts can be both arrays or objects, just like with outline parts previously.
-Use whichever is more convenient.
-:::
+When `what` is `outline`, `name` specifies which outline to import onto the XY plane, and `extrude` specifies how much to extrude it along the Z axis. When `what` is `case`, `name` specifies a previously defined case to use.
 
-When the `what` is `outline`, `name` specifies which outline to import onto the xy plane, while `extrude` specifies how much it should be extruded along the z axis.
-When the `what` is `case`, `name` specifies which previously defined case to use.
-After having established our base 3D object, it is (relatively!) `rotate`d, `shift`ed, and combined with what we have so far according to `operation`.
-If we only want to use an object as a building block for further objects, we can employ the same "start with an underscore" trick we learned at the outlines section to make it "private".
+After establishing a base 3D object, it can be `rotate`d, `shift`ed, and combined with the result of previous parts using `operation`.
 
-Individual case parts can again be listed as an object instead of an array, if that's more comfortable for inheritance/reuse (just like for outlines).
-And speaking of outline similarities, the `[+, -, ~]` plus name shorthand is available again.
-First it will try to look up cases, and then outlines by the name given.
-Stacking is omitted as it makes no sense here.
+Just like with outlines, you can use private cases (with names starting with `_`), object notation for parts, and string shorthands (`+`, `-`, `~`).
 
 ## Examples
 
 <details><summary>Simple Extrusion</summary>
 <p>
 
+This example takes a simple outline and extrudes it by 10mm to create a solid block.
+
 <Tabs>
 <TabItem value="config" label="Config" default>
 
 ```yaml
-
+points:
+  zones:
+    main:
+      columns: {c1:}
+      rows: {r1:}
+outlines:
+  simple:
+    - what: rectangle
+      size: [30, 20]
+cases:
+  block:
+    - what: outline
+      name: simple
+      extrude: 10
 ```
 
 </TabItem>
 <TabItem value="visualization" label="Visualization">
 <div style={{textAlign: 'center'}}>
 
-<!-- ![name](./assets/file.png) -->
+![Simple extrusion example](./assets/simple_extrusion.png)
 
 </div>
 </TabItem>
@@ -75,18 +77,47 @@ Stacking is omitted as it makes no sense here.
 <details><summary>Unibody Case</summary>
 <p>
 
+A more realistic example of creating a unibody case. We define outlines for the plate and the walls, then extrude and combine them.
+
 <Tabs>
 <TabItem value="config" label="Config" default>
 
 ```yaml
-
+points:
+  zones:
+    matrix:
+      columns: {c1:, c2:}
+      rows: {r1:, r2:}
+outlines:
+  plate:
+    - what: rectangle
+      where: true
+      bound: true
+  wall:
+    - what: rectangle
+      where: true
+      bound: true
+      expand: 3 # make the wall 3mm thick
+cases:
+  unibody:
+    - what: outline
+      name: wall
+      extrude: 10 # 10mm high walls
+    - what: outline
+      name: plate
+      extrude: 1.5 # 1.5mm thick plate
+      shift: [0, 0, 8.5] # position the plate at the top of the walls
+    - what: outline
+      name: plate
+      extrude: 10 # create cutouts for the switches
+      operation: subtract
 ```
 
 </TabItem>
 <TabItem value="visualization" label="Visualization">
 <div style={{textAlign: 'center'}}>
 
-<!-- ![name](./assets/file.png) -->
+![Unibody case example](./assets/unibody_case.png)
 
 </div>
 </TabItem>

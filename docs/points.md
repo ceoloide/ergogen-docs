@@ -54,94 +54,58 @@ So Ergogen tries to do as much of the heavy lifting as it can while providing mo
 
 ## Anchors
 
-One of these alternatives is the use of anchors, where we don't *directly* specify a point's `x`/`y`/`r` coordinates, but compute them from an already existing starting point through some translation/rotation/adjustment.
-Of course, direct point declarations are also possible when starting from `[0, 0, 0°]` and translating/rotating right to where you want the point to be, but we can do better than that.
-Anchors try to be very flexible, and it naturally comes with some complexity &ndash; but remember that they are just another way to declare a point.
+One of these alternatives is the use of **anchors**. With an anchor, you don't *directly* specify a point's `x`/`y`/`r` coordinates. Instead, you compute them from an already existing starting point through some translation, rotation, or other adjustment.
+
+Of course, direct point declarations are also possible by starting from `[0, 0, 0°]` and translating/rotating to where you want the point to be, but we can do better than that. Anchors are very flexible, which naturally comes with some complexity &ndash; but remember that they are just another way to declare a point.
 
 Anchors can be parsed from the following data types:
 
-- A ***string*** means it's just a reference to an already existing point with that name, without any further modifications.
-
-- An ***array*** means it's a multipart anchor (or, multi-anchor), each item being an anchor itself, recursively.
-  But why would we need multiple anchors for a single point, you might ask.
-  Because each sub-anchor becomes the starting point of the next.
-  
+- A **`string`**: A reference to an already existing point with that name, without any further modifications.
+- An **`array`**: A multipart anchor (or, multi-anchor), where each item is an anchor itself, recursively. Each sub-anchor becomes the starting point of the next.
   :::tip
-  Think of this as a kind of treasure hunt where you first have to find a clue to know where the next clue will be.
-  Through this *follow-the-dots* functionality, you can get to many interesting, exact locations on your board without having to actually calculate where that is.
+  Think of this as a kind of treasure hunt where you first have to find a clue to know where the next clue will be. Through this *follow-the-dots* functionality, you can get to many interesting, exact locations on your board without having to actually calculate where that is.
   :::
-
-- An ***object*** means it's a full anchor declaration.
-
+- An **`object`**: A full anchor declaration with several attributes.
 
 ### Attributes
 
 In a full, object anchor declaration, the following fields can be used:
 
-- **`ref`** is the starting point from where the anchor will perform its additional modifications.
-  This field is parsed as an anchor itself, recursively.
-  So in its easiest form, it can be a string to designate an existing starting point by name (more on names [later](#keys)), but it can also be a full nested anchor if so desired.
+- **`ref`**: The starting point for the anchor's modifications. This field is parsed as an anchor itself, recursively. It can be a string (referencing a point by name) or a full nested anchor.
 
-- **`aggregate`** is an alternative to `ref` when the combination of several locations is required as the starting point for further adjustment.
-  They're mutually exclusive, so we can use either `ref` or `aggregate` in any given anchor.
-  The aggregate field is always an object, containing:
-
-  - a `parts` array containing the sub-anchors we want to aggregate, and 
-  - a `method` string to indicate *how* we want to aggregate them.
-
-  The only method implemented so far is `average`, which is the default anyway, so the `method` can be omitted for now.
-
+- **`aggregate`**: An alternative to `ref` for combining several locations into a single starting point. You can use either `ref` or `aggregate` in an anchor, but not both.
+  The `aggregate` field is an object containing:
+  - `parts`: An array of sub-anchors to aggregate.
+  - `method`: A string indicating *how* to aggregate them. The only method implemented so far is `average` (the default).
   :::note
   Averaging applies to both the `x`/`y` coordinates *and* the `r` rotation.
   :::
 
-- **`orient`** is a kind of pre-rotation, meaning it happens before any shifting is done.
-  The value can be:
-
-  - a ***number***, in which case that number is simply added to the current rotation of the in-progress point calculation; or
-  - a ***sub-anchor***, in which case the point "turns towards" the point we reference (meaning its rotations will be exactly set to hit that point if a line was projected from it).
-
-  <br/>
-
+- **`orient`**: A pre-rotation that happens before any shifting. The value can be:
+  - A **`number`**: This value is added to the current rotation.
+  - A **sub-anchor**: The point "turns towards" the referenced point.
   :::note
-  Orienting only affects the `r` value of the point we're calculating.
+  `orient` only affects the `r` (rotation) value.
   :::
 
-- **`shift`** is for shifting (or, more formally, translating) the point on the XY plane.
-  The value can be:
-
-  - a ***array of exactly two numbers***, specifying the `x` and `y` shift, respectively, or
-  - a single ***number***, which would get parsed as `[number, number]`.
-
-  <br/>
-
+- **`shift`**: Translates the point on the XY plane. The value can be:
+  - An **`array` of two numbers**: The `x` and `y` shift, respectively.
+  - A single **`number`**: Parsed as `[number, number]`.
   :::caution
-  It's important that shifting happens according to the current rotation of the point.
-  By default, a 0° rotation is "looking up", so that positive `x` shifts move it to the right, negative `x` shifts to the left, positive `y` shifts up, negative `y` shifts down.
-  But if r=90° (so the point is "looking left", as, remember, rotation works counter-clockwise), then a positive `x` shift would move it upward.
+  Shifting is relative to the point's current rotation. At 0° rotation ("looking up"), a positive `x` shifts right and a positive `y` shifts up. At 90° rotation ("looking left"), a positive `x` shift would move the point upward.
   :::
 
-- **`rotate`** is a kind of *post*-rotation after shifting, as opposed to how `orient` was the *pre*-rotation.
-  Otherwise, it works the exact same way.
+- **`rotate`**: A post-rotation that happens after shifting. It works the same way as `orient`.
 
-- **`affect`** can specify an override to what fields we want to affect during the current anchor calculation.
-  The value can be:
-
-  - a ***string*** containing a subset of the characters `x`, `y`, or `r` only; or
-  - an ***array*** containing a subset of the one letter strings `"x"`, `"y"`, or `"r"` only.
-
-  <br/>
-
+- **`affect`**: Overrides which fields (`x`, `y`, or `r`) are affected by the current anchor calculation. The value can be:
+  - A **`string`**: A subset of the characters `x`, `y`, or `r`.
+  - An **`array`**: A subset of the strings `"x"`, `"y"`, or `"r"`.
   :::tip
-  Let's say you have a point rotated 45° and want to shift is "visually right". You could either reset its rotation via `orient`, then shift, then reset the rotation with `rotate`; or, you could do the shift and then declare that this whole anchor only `affect`s `"x"`. The *amount* of shifting wouldn't be the same, but the important thing is that you could constrain the movement to the X axis this way.
-
-  Or let's say you want to copy the rotation of another, already existing point into your current anchor calculation. You can do so using a multi-anchor (see above), `ref`erencing the existing point in the second part, and then declare `affect: "r"` to prevent it from overwriting anything else, thereby setting just the rotation.
+  - To shift a rotated point "visually right", you could `orient` it back to 0°, `shift` it, and then `rotate` it back. Or, you could just `shift` it and use `affect: "x"` to constrain the movement to the global X axis.
+  - To copy only the rotation from another point, you can use a multi-anchor. In the second part, `ref`erence the other point and set `affect: "r"`.
   :::
 
-- **`resist`** states that we do **not** want the special treatment usually afforded to mirrored points.
-  We'll get to [mirroring](#mirroring) in a second, but from an anchor perspective, all we need to know is that shifting and orienting/rotating are all mirrored for mirrored points, to keep things symmetric.
-  So if we specify a shift of `[1, 1]` on a mirrored point, what actually gets applied is `[-1, 1]`, and rotations are clockwise (read, **counter**-counter-clockwise) in those cases, too.
-  But if we don't want this behavior, (say, because PCB footprints go on the same, upward facing side of the board, no matter the half) we can `resist` the special treatment.
+- **`resist`**: If `true`, this anchor will ignore the special adjustments usually applied to mirrored points. We'll get to [mirroring](#mirroring) in a second, but in short: shifts and rotations on mirrored points are inverted to maintain symmetry. `resist` disables this behavior, which is useful for components like PCB footprints that should be oriented the same way on both halves.
 
 
 
@@ -372,19 +336,15 @@ anchor_3:
 
 ## Zones
 
-Anchors are a great way to dial in the exact position of a single point, but they would be cumbersome for whole keyboards.
-So while you'll be using anchors all the time in sub-fields of your config, the main approach to define batches of points is through the use of `zones`.
+Anchors are a great way to dial in the exact position of a single point, but they would be cumbersome for whole keyboards. While you'll be using anchors all the time in your config, the main approach to define batches of points is through the use of **zones**.
 
 ### Basics
 
-I'm probably not revealing a big secret if I confess that "Ergogen" is just a contraction of "Ergonomic Generator".
-And what makes it "Ergo" is its opinionated, explicit focus on the column-stagger.
-This means that instead of the more common rows-then-columns order, Ergogen lays out zones columns first, left-to-right by default.
-A collection of columns comprises a zone, and we can have as many zones as we'd like &ndash; for example, to differentiate the keywell and the thumb fan/cluster.
-Columns can be staggered and splayed relative to each other, while zones can be anchored to each other so that everything is right where you want it.
-Within columns, the rows are built from bottom to top by default.
+"Ergogen" is a contraction of "Ergonomic Generator," and what makes it "ergo" is its opinionated, explicit focus on the column-stagger. This means that instead of the more common row-then-column order, Ergogen lays out zones **columns first**, from left-to-right by default.
 
-A full zone declaration looks something like this (in the context of the whole config):
+A collection of columns comprises a zone, and you can have as many zones as you'd like &ndash; for example, to differentiate the keywell and the thumb fan. Columns can be staggered and splayed relative to each other, while zones can be anchored to each other so that everything is right where you want it. Within columns, the rows are built from bottom-to-top by default.
+
+A full zone declaration looks something like this:
 
 ```yaml
 points:
@@ -408,11 +368,9 @@ points:
 
 ### Inheritance
 
-As you can see, there are quite a few places where these so-called key-level attributes can be defined.
-How are poor keys to know which to pay attention to, and which to ignore?
-Enter inheritance, where (somewhat similarly to the usual programming concept of inheritance) we go from generic to specific, override what we must, and just reuse the rest.
+As you can see, there are quite a few places where key-level attributes can be defined. To determine which attributes apply to which key, Ergogen uses an **inheritance** system. Similar to object-oriented programming, we go from generic to specific, overriding what we must, and reusing the rest.
 
-The inheritance order goes:
+The inheritance order is:
 
 1. Built-in, hardcoded defaults
 2. Global `points.key` overrides
@@ -421,112 +379,68 @@ The inheritance order goes:
 5. Row-wide `points.zones.<zone_name>.rows.<row_name>` overrides
 6. Key-specific `points.zones.<zone_name>.columns.<column_name>.rows.<row_name>` overrides
 
-All this complexity is only there to minimize the need for repetition.
-We can freely choose the best place for any key-level attribute where it can apply to all its victims while being declared only once.
-These sources "extend" each other in this order so by the time we reach a specific key, every level had an opportunity to modify something.
+This complexity exists to minimize repetition. You can choose the best place for any key-level attribute where it can apply to all its intended keys while being declared only once. These sources "extend" each other in the order above, so by the time we reach a specific key, every level has had an opportunity to modify something.
 
 :::caution
-As you might notice, levels 2-3-4 have a `.key` suffix while levels 5-6 do *not*!
-This is because parent levels for the former three (`points`, `points.zones.<zone_name>` and `points.zones.<zone_name>.columns.<column_name>`, respectively) can have other content as well, while the latter two are exclusively for key-level attributes anyway.
+Note that levels 2, 3, and 4 have a `.key` suffix, while levels 5 and 6 do *not*. This is because the parent levels for the first three (`points`, `zone`, and `column`) can have other content, while the latter two are exclusively for key-level attributes.
 :::
 
 :::note
-The higher the number before an override, the higher chance it has to override anything that came before it.
-So values declared at the 6th, key-specific level are sacred and inviolable, while everything the user configures can override the lowly hardcoded defaults at level 1.
+The higher the number in the inheritance order, the higher the precedence. Values declared at the key-specific level (6) are sacred, while everything the user configures can override the hardcoded defaults (1).
 :::
 
-For example, let's suppose that a key-related attribute is already defined at the column-level (at `points.zones.<zone_name>.columns.<column_name>.key`, so level 4).
-When we later encounter a key-level extension for this key (at `points.zones.<zone_name>.columns.<column_name>.rows.<row_name>`, so level 6) that specifies a few things but not this exact key, its value will stay the same instead of disappearing.
+If a key-related attribute is defined at the column-level (4), and a key-level definition (6) for the same key specifies other attributes but not this one, its value will be inherited from the column.
 
 :::note
-When we **want** it to disappear, UN-specifying values is also possible with the `$unset` directive, because this key-level inheritance relies on the same implementation we've discussed in the [`preprocessing`](./preprocessing.md) section.
-
-A common use-case for this is when you'd want to remove an additional pinky key.
-You can still declare zone-wide bottom/home/top rows to apply to the ring/middle/index/inner columns, but for the pinky, you simply override as `pinky.rows.top: $unset` to be left with only two pinky keys.
+To **unset** a value, you can use the `$unset` directive. This is useful when you want to prevent a key from inheriting an attribute. For example, to remove a pinky key, you can declare zone-wide `bottom`, `home`, and `top` rows, but for the `pinky` column, you can override `pinky.rows.top: $unset`.
 :::
 
-When multiple levels define the same attribute and there is a "collision", simple values (like booleans, numbers, or strings) replace the old ones, while composites (arrays or objects) apply this same extension mechanism recursively, element-wise.
-So when `key = 1` is extended by `key = 2`, the result is `key = 2`.
-But if `key = {a: 1}` is extended by `key = {b: 2}`, the result is `key = {a: 1, b: 2}`.
-Lastly, if `key = {a: 1}` is extended by `key = {a: $unset, b: 2}`, the result is `key = {b: 2}`.
+When multiple levels define the same attribute, simple values (booleans, numbers, strings) are replaced, while composite values (arrays, objects) are merged recursively.
 
-
-
-
+- `key: 1` extended by `key: 2` results in `key: 2`.
+- `key: {a: 1}` extended by `key: {b: 2}` results in `key: {a: 1, b: 2}`.
+- `key: {a: 1}` extended by `key: {a: $unset, b: 2}` results in `key: {b: 2}`.
 
 ### Keys
 
-Keys can contain any metadata as attributes (which may become useful later down the line), but only a handful has meaning when laying out positions.
-These are the following:
+Keys can contain any metadata as attributes, but only a handful have special meaning for laying out positions. These are:
 
-- **`stagger`**:
-  Column staggering means an extra vertical shift to the starting point of a whole column compared to the previous one (initially `0`, cumulative afterwards).
-  Its default value is `0` (also overrideable with the `$default_stagger` internal variable).
+- **`stagger`**: An extra vertical shift for a whole column compared to the previous one. Default: `0`.
 
-- **`spread`**:
-  Once a column has been laid out, `spread` (the horizontal space between this column and the next) is applied before the layout of the next column begins.
-  Its default value is `u` (also overrideable with the `$default_spread` internal variable).
+- **`spread`**: The horizontal space between the current column and the next one. Default: `u`.
 
-- **`splay`**:
-  As a kind of companion to `spread`, `splay` applies a rotation (around an optional **`origin`**) to the starting point of a new column.
-  Its default value is `0` (also overrideable with the `$default_splay` internal variable), and it rotates around the default origin of `[0, 0]` (meaning the center of where the first key in the column would go).
+- **`splay`**: A rotation applied to the starting point of a new column, around an optional **`origin`**. Default: `0`.
 
-- **`padding`**:
-  Once a point within a column is determined, `padding` represents the vertical gap between it and the next row.
-  Its default value is `u` (also overrideable with the `$default_padding` internal variable).
+- **`padding`**: The vertical gap between a key and the next one in the same column. Default: `u`.
 
-- **`orient`** / **`shift`** / **`rotate`**:
-  The names might be familiar from the anchor section.
-  And indeed, they do behave very similarly &ndash; only they are interpreted **cumulatively** within a column.
-  The current key `orients` (default = `0`), `shifts` (default = `[0, 0]`), and rotates (default = `0`), and in doing so, not only positions itself, but provides the starting point for the *next* row within the column (to which the above `padding` can be applied).
+- **`orient`** / **`shift`** / **`rotate`**: These behave similarly to their [anchor](#anchors) counterparts but are interpreted **cumulatively** within a column. They position the current key and also provide the starting point for the next key in the column.
 
-- **`adjust`**:
-  This field is also used to adjust individual points &ndash; but, as opposed to the above trio, it's parsed as an actual anchor, and it applies **independently**, affecting only the current key and not the cumulative column layout.
+- **`adjust`**: An anchor that applies **independently** to the current key, without affecting the cumulative column layout.
 
-- **`bind`**:
-  Represents the amount of directional "reach" each key has when it tries to bind with its neighbors to form a contiguous shape.
-  For a more in-depth explanation, check the [outlines section](./outlines.md).
-  The value can be a number (uniform reach in every direction), an array of two numbers (horizontal/vertical reach), or an array of four numbers (top, right, bottom, and left reach, respectively &ndash; similarly to how CSS would assign things).
-  The default is no bind (represented by `-1`, to differentiate from `0` length reaches).
+- **`bind`**: The directional "reach" of a key for forming contiguous outlines. See the [outlines section](./outlines.md) for more details. The value can be:
+  - a `number` (uniform reach)
+  - an `array` of two numbers (`[horizontal, vertical]`)
+  - an `array` of four numbers (`[top, right, bottom, left]`)
+  The default is `-1` (no bind).
 
-- **`autobind`**:
-  Enables automatically assigned binding in relevant direction to combine traditional keywells.
-  For a more in-depth explanation, check the [outlines section](./outlines.md).
-  Its default value is `10` (also overrideable with the `$default_autobind` internal variable).
+- **`autobind`**: Enables automatically assigned binding to combine traditional keywells. See the [outlines section](./outlines.md) for more details. Default: `10`.
 
-- **`skip`**:
-  This field signals that the current point is just a "helper" and should not be included in the output.
-  This can happen when a _real_ point is more easily calculable through a "stepping stone", but then we don't actually want the stepping stone to be a key itself.
-  The default is, of course, `false`.
+- **`skip`**: If `true`, the current point is treated as a "helper" and is not included in the final output. This is useful for creating stepping stones for other points. Default: `false`.
 
-- **`asym`**:
-  Determines which side of the keyboard the key should belong to (see [Mirroring](#mirroring)).
-  Its default value is `both`.
+- **`asym`**: Determines which side of the keyboard the key belongs to. See [Mirroring](#mirroring). Default: `both`.
 
-- **`mirror`**:
-  Provides a way to override any key-level attributes for mirrored keys (see [Mirroring](#mirroring)).
-  Empty by default.
+- **`mirror`**: Provides a way to override any key-level attributes for mirrored keys. See [Mirroring](#mirroring). Empty by default.
 
-- **`colrow`**:
-  Built-in convenience variable to store a concatenated name of the column and the row, uniquely identifying a key **within a zone**.
-  Its value is `{{col.name}}_{{row}}`, built through templating (see below).
+- **`colrow`**: A built-in variable that stores a concatenated name of the column and row, like `pinky_home`. The default template is `{{col.name}}_{{row}}`.
 
-- **`name`**:
-  The name of the key that identifies it uniquely not just within its zone, but **globally**.
-  Its default value is `{{zone.name}}_{{colrow}}`, built through templating (see below).
-
+- **`name`**: The globally unique name of the key. The default template is `{{zone.name}}_{{colrow}}`, which would result in something like `matrix_pinky_home`.
   :::note
-  Single key zones are common helpers for defining and naming interesting points on the board.
-  To spare you from having to reference these as `zonename_default_default` (each `default` being the default column or row name, respectively, when nothing is specified), `default` suffices are always trimmed.
-  So for single key zones, the name of the key is equivalent to the name of the zone.
+  For single-key zones, the `default` column and row names are trimmed, so the key name is the same as the zone name.
   :::
 
-- **`width`** / **`height`**:
-  Helper values to signify the keycap width/height intended for the current position(s).
-
+- **`width`** / **`height`**: Helper values for the keycap width and height.
   :::caution
-  These values only apply to the **demo** representation of the calculated key positions.
-  For actual outlines to be cut (or used as a basis for cases), see the [outlines section](./outlines.md).
+  These values only affect the **demo** output. For actual outlines, see the [outlines section](./outlines.md).
   :::
 
 Other than these, any extra field can be specified, containing any value.
@@ -800,55 +714,98 @@ We create the new column anchor by `spread`ing/`stagger`ing/`splay`ing the old o
 
 <hr/>
 
-
-
 Once we have an existing zone (`matrix`), we can anchor further zones to it &ndash; like, say, a thumbfan.
 
 <Tabs>
 <TabItem value="config" label="Config" default>
 
 ```yaml
-
-```
-
-</TabItem>
-<TabItem value="1" label="1">
-<div style={{textAlign: 'center'}}>
-
-<!-- ![Thumbfan - step 1](./assets/thumbfan_1.png) -->
-
-</div>
-
-**Step 1**: 
-
-</TabItem>
-</Tabs>
-
-<hr/>
-
-
-
-
-
-### Examples
-
-<details><summary>Choc spacing</summary>
-<p>
-
-arst neio
-
-<Tabs>
-<TabItem value="config" label="Config" default>
-
-```yaml
-
+points:
+  zones:
+    matrix:
+      # The matrix is the same as in the layout example above
+      anchor.rotate: 5
+      columns:
+        pinky:
+        ring.key:
+          splay: -5
+          stagger: 12
+          origin: [-u/2, -u/2]
+        middle.key.stagger: 5
+        index.key.stagger: -6
+        inner.key.stagger: -2
+      rows:
+        bottom:
+        home:
+        top:
+    thumbfan:
+      # Anchor the thumbfan to the inner-most, bottom-most key of the matrix
+      anchor:
+        ref: matrix_inner_bottom
+        shift: [-10, -10]
+        rotate: -15
+      columns:
+        # Note that columns can also be just single keys
+        thumb1:
+        thumb2.key:
+          spread: u-1
+          stagger: 10
+        thumb3.key:
+          spread: u-1
+          stagger: 10
 ```
 
 </TabItem>
 <TabItem value="visualization" label="Visualization">
 <div style={{textAlign: 'center'}}>
 
-<!-- ![name](./assets/file.png) -->
+![Thumbfan example visualization](./assets/thumbfan.png)
+
+</div>
+</TabItem>
+</Tabs>
+
+**Step 1**: We anchor the new `thumbfan` zone to the `matrix_inner_bottom` key.
+**Step 2**: We shift and rotate it to a suitable position.
+**Step 3**: We define the keys of the thumbfan with their own `spread` and `stagger` values.
+
+<hr/>
+
+### Examples
+
+<details><summary>Choc spacing</summary>
+<p>
+
+Kailh Choc switches have a different footprint than MX-style switches, and they are usually spaced closer together. Here is an example of how to adjust for that. We override the default `spread` and `padding` globally, and also set the `width` and `height` to match Choc keycaps.
+
+<Tabs>
+<TabItem value="config" label="Config" default>
+
+```yaml
+points:
+  key:
+    spread: 18
+    padding: 17
+    width: 17
+    height: 16
+  zones:
+    matrix:
+      columns:
+        pinky:
+        ring:
+        middle:
+        index:
+      rows:
+        bottom:
+        home:
+        top:
+```
+
+</TabItem>
+<TabItem value="visualization" label="Visualization">
+<div style={{textAlign: 'center'}}>
+
+![Choc spacing example visualization](./assets/choc_spacing.png)
 
 </div>
 </TabItem>
@@ -860,20 +817,31 @@ arst neio
 <details><summary>Row overrides</summary>
 <p>
 
-arst neio
+Sometimes, you want a specific row to behave differently. In this example, we make the home row stick out by giving it an extra `shift`.
 
 <Tabs>
 <TabItem value="config" label="Config" default>
 
 ```yaml
-
+points:
+  zones:
+    matrix:
+      columns:
+        pinky:
+        ring:
+        middle:
+        index:
+      rows:
+        bottom:
+        home.shift: [-3, 0]
+        top:
 ```
 
 </TabItem>
 <TabItem value="visualization" label="Visualization">
 <div style={{textAlign: 'center'}}>
 
-<!-- ![name](./assets/file.png) -->
+![Row overrides example visualization](./assets/row_overrides.png)
 
 </div>
 </TabItem>
@@ -885,20 +853,33 @@ arst neio
 <details><summary>Column arcs</summary>
 <p>
 
-arst neio
+To create a natural curve for a column, you can apply a slight rotation to each key. This is done cumulatively.
 
 <Tabs>
 <TabItem value="config" label="Config" default>
 
 ```yaml
-
+points:
+  zones:
+    matrix:
+      columns:
+        arc:
+          rows:
+            bottom.rotate: -5
+            home.rotate: -5
+            top.rotate: -5
+      rows:
+        # need to define rows here for the column to pick them up
+        bottom:
+        home:
+        top:
 ```
 
 </TabItem>
 <TabItem value="visualization" label="Visualization">
 <div style={{textAlign: 'center'}}>
 
-<!-- ![name](./assets/file.png) -->
+![Column arcs example visualization](./assets/column_arcs.png)
 
 </div>
 </TabItem>
@@ -908,34 +889,6 @@ arst neio
 </details>
 
 <br />
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## Adjustments
 
@@ -952,8 +905,6 @@ points:
   mirror: <axis> # global mirror
 ```
 
-
-
 ### Rotation
 
 In this context, `rotate` can apply an angle to all relevant points, most often used to simulate the inter-half angle of one-piece boards.
@@ -961,8 +912,6 @@ If specified at the zone level, it applies to the points of that zone only &ndas
 
 The origin of the rotation is always assumed to be `[0, 0]`.
 This doesn't matter for global rotations, but should be considered for zone-level ones.
-
-
 
 ### Mirroring
 
@@ -981,8 +930,7 @@ As we just saw, `points.mirror` and `points.zones.<zone_name>.mirror` are for de
 These are not to be confused with the key-level `mirror` attribute (appearing at any of the 6 levels we've discussed for [inheritance](#inheritance)), which provides a way to override any other key-level attribute for mirrored versions of points.
 :::
 
-Now if our design is symmetric, we're done.
-Otherwise, we need to use the `asym` key-level attribute to indicate which side any given point should appear on.
+Now if our design is not symmetric, we need to use the `asym` key-level attribute to indicate which side any given point should appear on.
 If it's set as `source`, mirroring will simply skip this key, as it should only be present on the source side, as it was declared.
 If the `asym` field is set as `clone`, mirroring will "move" the point instead of copying it, because it should only appear on the mirrored side.
 The default value of `both` assumes symmetry &ndash; so the given point should appear on both sides of the board.
@@ -995,30 +943,37 @@ But as aliases, `origin`/`image`, `base`/`derived`, `primary`/`seconday` and eve
 And this concludes point definitions.
 This should be generic enough to describe any ergo layout, yet hopefully easy enough so that you'll appreciate not having to work in raw CAD.
 
-
-
-
-
-
 ### Examples
 
 <details><summary>Zone-level adjustment</summary>
 <p>
 
-arst neio
+You can apply adjustments like `rotate` to an entire zone. Here, we rotate the whole `matrix` zone by -10 degrees.
 
 <Tabs>
 <TabItem value="config" label="Config" default>
 
 ```yaml
-
+points:
+  zones:
+    matrix:
+      rotate: -10 # This rotates the whole zone
+      columns:
+        pinky:
+        ring:
+        middle:
+        index:
+      rows:
+        bottom:
+        home:
+        top:
 ```
 
 </TabItem>
 <TabItem value="visualization" label="Visualization">
 <div style={{textAlign: 'center'}}>
 
-<!-- ![name](./assets/file.png) -->
+![Zone-level adjustment visualization](./assets/zone_adjustment.png)
 
 </div>
 </TabItem>
@@ -1027,23 +982,41 @@ arst neio
 </p>
 </details>
 
-<details><summary>Post-adjustment zones</summary>
+<details><summary>Anchoring to adjusted zones</summary>
 <p>
 
-arst neio
+When you anchor a new zone to a key in a zone that has been adjusted (e.g., rotated), the anchor will correctly use the final position of the reference key.
 
 <Tabs>
 <TabItem value="config" label="Config" default>
 
 ```yaml
-
+points:
+  zones:
+    matrix:
+      rotate: -10
+      columns:
+        pinky:
+        ring:
+        middle:
+        index:
+      rows:
+        bottom:
+        home:
+        top:
+    thumb:
+      anchor:
+        ref: matrix_index_bottom
+        shift: [0, -u]
+      columns:
+        thumb1:
 ```
 
 </TabItem>
 <TabItem value="visualization" label="Visualization">
 <div style={{textAlign: 'center'}}>
 
-<!-- ![name](./assets/file.png) -->
+![Anchoring to adjusted zones visualization](./assets/anchoring_adjusted.png)
 
 </div>
 </TabItem>
@@ -1055,21 +1028,45 @@ arst neio
 <details><summary>Asymmetry</summary>
 <p>
 
-arst neio
-- don't forget a key-level mirror example here, too
+For split keyboards, you often have keys that are only on one side. You can use the `asym` property for this. `asym: source` means the key will only appear on the left (source) half, and `asym: clone` means it will only appear on the right (mirrored) half.
+
+You can also use the key-level `mirror` property to change attributes for the mirrored version of a key. In this example, the `thumb2` key has a different `splay` on the right side.
 
 <Tabs>
 <TabItem value="config" label="Config" default>
 
 ```yaml
-
+points:
+  mirror:
+    ref: matrix_index_bottom
+    distance: 100
+  zones:
+    matrix:
+      columns:
+        pinky:
+        ring:
+        middle:
+        index:
+      rows:
+        bottom:
+        home:
+        top:
+    thumb:
+      anchor:
+        ref: matrix_index_bottom
+        shift: [0, -u]
+      columns:
+        thumb1.asym: source
+        thumb2:
+          mirror.splay: -15 # splay is different on the right side
+        thumb3.asym: clone
 ```
 
 </TabItem>
 <TabItem value="visualization" label="Visualization">
 <div style={{textAlign: 'center'}}>
 
-<!-- ![name](./assets/file.png) -->
+![Asymmetry example visualization](./assets/asymmetry.png)
 
 </div>
 </TabItem>
